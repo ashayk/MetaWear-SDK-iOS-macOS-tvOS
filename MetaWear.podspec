@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
                          DESC
   s.author             = { 'Stephen Schiffli' => 'stephen@mbientlab.com' }
 
-  s.source             = { :git => 'https://github.com/mbientlab/MetaWear-SDK-iOS-macOS-tvOS.git', :tag => s.version.to_s }
+  s.source             = { :git => 'https://github.com/ashayk/MetaWear-SDK-iOS-macOS-tvOS.git', :tag => s.version.to_s }
 
   s.platform = :ios, :osx, :tvos
   s.ios.deployment_target = '8.0'

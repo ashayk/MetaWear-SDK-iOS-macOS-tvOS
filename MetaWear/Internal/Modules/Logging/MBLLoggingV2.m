@@ -181,11 +181,11 @@
     // Now that it's processed, commit it to the database
     [managedObjectContext performBlock:^{
         // We may need to reject this entry as a duplicate later, so save it as an MBLRejectEntry
-        MBLRejectEntry *rejectEntry = (MBLRejectEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRejectEntry" inManagedObjectContext:managedObjectContext];
+        MBLRejectEntry *rejectEntry = (MBLRejectEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRejectEntry" inManagedObjectContext:self->managedObjectContext];
         rejectEntry.timestamp = timestamp;
         rejectEntry.data = curEntry;
         
-        MBLRawLogEntry *entry = (MBLRawLogEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRawLogEntry" inManagedObjectContext:managedObjectContext];
+        MBLRawLogEntry *entry = (MBLRawLogEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRawLogEntry" inManagedObjectContext:self->managedObjectContext];
         entry.timestamp = timestamp;
         entry.resetId = resetId;
         entry.triggerId = triggerId;

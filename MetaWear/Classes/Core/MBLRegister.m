@@ -239,7 +239,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         if ([MBLConstants isSimulatorQueue]) {
             [source trySetResult:nil];
         } else if (isRead || self.writeResponds) {
-            [taskSources addObject:source];
+            [self->taskSources addObject:source];
         } else {
             [source trySetResult:nil];
         }
@@ -331,7 +331,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         if (!self.isNotifyingImpl) {
             self.isNotifyingImpl = YES;
             
-            startNotificationTask = [[[[self initializeAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->startNotificationTask = [[[[self initializeAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self performAsyncStartNotifications];
             }] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self activateAsync];
@@ -342,7 +342,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         } else {
             [device decrementCount];
         }
-        return startNotificationTask;
+        return self->startNotificationTask;
     }];
 }
 
@@ -373,7 +373,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
             
             [self removeNotificationHandlers];
             
-            stopNotificationTask = [[[[self deactivateAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->stopNotificationTask = [[[[self deactivateAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self performAsyncStopNotificationsAsync];
             }] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self deinitializeAsync];
@@ -384,7 +384,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         } else {
             [device decrementCount];
         }
-        return stopNotificationTask;
+        return self->stopNotificationTask;
     }];
 }
 
@@ -413,7 +413,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
 - (void)removeNotificationHandlers
 {
     dispatch_async([MBLConstants metaWearQueue], ^{
-        [notifyCallbacks removeAllObjects];
+        [self->notifyCallbacks removeAllObjects];
     });
 }
 
@@ -497,7 +497,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         self.initializeCount++;
         if (self.initializeCount == 1) {
             // Initialize the module then initialize us
-            initializeTask = [[[self.module initializeAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->initializeTask = [[[self.module initializeAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self performAsyncInitialization];
             }] continueOnMetaWearWithBlock:^id _Nullable(BFTask * _Nonnull task) {
                 if (task.faulted) {
@@ -506,7 +506,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
                 return task;
             }];
         }
-        return initializeTask;
+        return self->initializeTask;
     }];
 }
 
@@ -516,7 +516,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         self.initializeCount--;
         if (self.initializeCount == 0) {
             // Deinitialize us then deinitialize the module
-            deinitializeTask = [[[self performAsyncDeinitialization] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->deinitializeTask = [[[self performAsyncDeinitialization] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self.module deinitializeAsync];
             }] continueOnMetaWearWithBlock:^id _Nullable(BFTask * _Nonnull task) {
                 if (task.faulted) {
@@ -527,7 +527,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         }
         NSAssert(self.initializeCount >= 0, @"init/deinit calls unbalanced.");
         self.initializeCount = MAX(self.initializeCount, 0);
-        return deinitializeTask;
+        return self->deinitializeTask;
     }];
 }
 
@@ -536,7 +536,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
     return [BFTask taskFromMetaWearWithBlock:^id{
         self.activateCount++;
         if (self.activateCount == 1) {
-            activateTask = [[[self performAsyncActivation] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->activateTask = [[[self performAsyncActivation] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self.module activateAsync];
             }] continueOnMetaWearWithBlock:^id _Nullable(BFTask * _Nonnull task) {
                 if (task.faulted) {
@@ -545,7 +545,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
                 return task;
             }];
         }
-        return activateTask;
+        return self->activateTask;
     }];
 }
 
@@ -554,7 +554,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
     return [BFTask taskFromMetaWearWithBlock:^id{
         self.activateCount--;
         if (self.activateCount == 0) {
-            activateTask = [[[self.module deactivateAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
+            self->activateTask = [[[self.module deactivateAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
                 return [self performAsyncDeactivation];
             }] continueOnMetaWearWithBlock:^id _Nullable(BFTask * _Nonnull task) {
                 if (task.faulted) {
@@ -565,7 +565,7 @@ typedef NS_OPTIONS(uint8_t, MBLRegisterState) {
         }
         NSAssert(self.activateCount >= 0, @"activate/deactivate calls unbalanced.");
         self.activateCount = MAX(self.activateCount, 0);
-        return activateTask;
+        return self->activateTask;
     }];
 }
 

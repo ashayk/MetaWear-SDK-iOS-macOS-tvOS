@@ -724,9 +724,9 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
             case MBLConnectionStateDisconnecting:
                 self.state = MBLConnectionStateConnecting;
                 BFTask *task = [self waitForConnectionWithTimeout:timeout];
-                characteristicCount = 0;
-                serviceCount = 0;
-                connectionRetryCount = 2;
+                self->characteristicCount = 0;
+                self->serviceCount = 0;
+                self->connectionRetryCount = 2;
                 [[MBLMetaWearManager sharedManager] connectMetaWear:self];
                 return task;
         }
@@ -945,14 +945,14 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
         // Clean up everything
         self.peripheral = nil;
         self.state = MBLConnectionStateDisconnected;
-        metawearCommandCharacteristic = nil;
-        metawearNotification6Characteristic = nil;
-        batteryLifeCharacteristic = nil;
-        disManufacturerNameCharacteristic = nil;
-        disSerialNumberCharacteristic = nil;
-        disHardwareRevisionCharacteristic = nil;
-        disFirmwareRevisionCharacteristic = nil;
-        disModelNumberCharacteristic = nil;
+        self->metawearCommandCharacteristic = nil;
+        self->metawearNotification6Characteristic = nil;
+        self->batteryLifeCharacteristic = nil;
+        self->disManufacturerNameCharacteristic = nil;
+        self->disSerialNumberCharacteristic = nil;
+        self->disHardwareRevisionCharacteristic = nil;
+        self->disFirmwareRevisionCharacteristic = nil;
+        self->disModelNumberCharacteristic = nil;
         
         // Inform all the modules of this disconnection
         for (id obj in self.modules) {
@@ -965,15 +965,15 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
         
         // On disconnect we cant expect to get past reads back right, so clear out everything
         [self.zeroCountQueue reset];
-        [simulatorCountQueue reset];
-        simulatorBusy = NO;
-        simulatorFreeTasks = [NSMutableArray array];
+        [self->simulatorCountQueue reset];
+        self->simulatorBusy = NO;
+        self->simulatorFreeTasks = [NSMutableArray array];
         
         // Persist the current state to disk
         return [self synchronizeAsync];
     }] continueOnMetaWearWithBlock:^id _Nullable(BFTask * _Nonnull t) {
         // Make sure all the connection handlers are flushed out
-        if (!setupRequestedDisconnect) {
+        if (!self->setupRequestedDisconnect) {
             NSError *connectionError = error;
             switch (prevState) {
                 case MBLConnectionStateConnecting:
@@ -992,7 +992,7 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
                     break;
             }
         }
-        setupRequestedDisconnect = NO;
+        self->setupRequestedDisconnect = NO;
         
         // And flush out all the disconnection handlers
         [self invokeDisconnectionHandlers:error];
@@ -1087,7 +1087,7 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
         // At that point we reset the command count and update the cache
         if (!wasSuspended) {
             [self.zeroCountQueue addOperationWithBlock:^{
-                commandCount = 0;
+                self->commandCount = 0;
                 [self synchronizeAsync];
             }];
         }
@@ -1484,15 +1484,15 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
     [[[[[[[[self readDeviceInfoAsync] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask<MBLDeviceInfo *> * _Nonnull t) {
         // Starting firmware 1.1.0 we can flood the beast!
         if ([MBLConstants versionString:t.result.firmwareRevision isLessThan:@"1.1.0"]) {
-            maxPendingWrites = 3;
+            self->maxPendingWrites = 3;
         } else {
-            maxPendingWrites = 10;
+            self->maxPendingWrites = 10;
         }
         // Make sure the firmware isn't too old
         NSString *required = MBLFirmwareVersionString([MBLMetaWearManager sharedManager].minimumRequiredVersion);
         if ([MBLConstants versionString:t.result.firmwareRevision isLessThan:required]) {
             // No sense to retry connection
-            connectionRetryCount = 0;
+            self->connectionRetryCount = 0;
             return [BFTask taskWithError:[NSError errorWithDomain:kMBLErrorDomain
                                                              code:kMBLErrorOutdatedFirmware
                                                          userInfo:@{NSLocalizedDescriptionKey : @"Firmware update required before MetaWear can be used."}]];
@@ -1502,7 +1502,7 @@ typedef void (^MBLModuleInfoHandler)(MBLModuleInfo *moduleInfo);
     }] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask<MBLDeviceInfo *> * _Nonnull t) {
         // Start listening to the global notification register since the following
         // checks need to read data (which uses callbacks throught this characteristic)
-        [self.peripheral setNotifyValue:YES forCharacteristic:metawearNotification6Characteristic];
+        [self.peripheral setNotifyValue:YES forCharacteristic:self->metawearNotification6Characteristic];
         // Get MAC address if needed (but ignore errors)
         return [self.mac ? nil : [self.settings.macAddress readAsync] continueOnMetaWearWithBlock:^id _Nullable(BFTask<MBLStringData *> * _Nonnull t) {
             self.mac = t.result.value;

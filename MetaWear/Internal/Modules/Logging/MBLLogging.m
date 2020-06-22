@@ -296,7 +296,7 @@ typedef struct __attribute__((packed)) {
     [self performRawReadOutWithHandler:^(NSError *error) {
         if (error) {
             [source trySetError:error];
-            dispatch_group_leave(logProcessingGroup);
+            dispatch_group_leave(self->logProcessingGroup);
             return;
         }
         
@@ -304,7 +304,7 @@ typedef struct __attribute__((packed)) {
             // TODO: Figure out how to track this better
             if (!event.loggingIds.count) {
                 [source trySetResult:@[]];
-                dispatch_group_leave(logProcessingGroup);
+                dispatch_group_leave(self->logProcessingGroup);
                 return;
             }
             
@@ -313,7 +313,7 @@ typedef struct __attribute__((packed)) {
             [self entriesForTriggerId:[loggingIds[0] intValue] handler:^(NSArray * _Nullable rawEntries, NSError * _Nullable error) {
                 if (error) {
                     [source trySetError:error];
-                    dispatch_group_leave(logProcessingGroup);
+                    dispatch_group_leave(self->logProcessingGroup);
                     return;
                 }
                 // Initialize the final log, this will contain all the properly formated data objects
@@ -327,7 +327,7 @@ typedef struct __attribute__((packed)) {
                     [self deleteObjects:@[rawEntries]];
                     
                     [source trySetResult:log];
-                    dispatch_group_leave(logProcessingGroup);
+                    dispatch_group_leave(self->logProcessingGroup);
                 } else if (loggingIds.count > 1) {
                     // Longer path to merge different logging id's into a single object
                     
@@ -347,7 +347,7 @@ typedef struct __attribute__((packed)) {
                         [self entriesForTriggerId:uid.intValue handler:^(NSArray * _Nullable rawEntries, NSError * _Nullable error) {
                             if (error) {
                                 [source trySetError:error];
-                                dispatch_group_leave(logProcessingGroup);
+                                dispatch_group_leave(self->logProcessingGroup);
                                 return;
                             }
                             [rawEntriesToDelete addObject:rawEntries];
@@ -380,7 +380,7 @@ typedef struct __attribute__((packed)) {
                                 
                                 [self deleteObjects:rawEntriesToDelete];
                                 [source trySetResult:log];
-                                dispatch_group_leave(logProcessingGroup);
+                                dispatch_group_leave(self->logProcessingGroup);
                             }
                         }];
                     }
@@ -470,8 +470,8 @@ typedef struct __attribute__((packed)) {
             }
             
             uint32_t remainingEntries = data.value.unsignedIntValue;
-            @synchronized(handlerMutex) {
-                for (MBLLogProgressHandler progressHandler in progressHandlers) {
+            @synchronized(self->handlerMutex) {
+                for (MBLLogProgressHandler progressHandler in self->progressHandlers) {
                     progressHandler(totalEntries, remainingEntries);
                 }
             }
@@ -504,9 +504,9 @@ typedef struct __attribute__((packed)) {
                 if (error) {
                     return;
                 }
-                newPageStarted = YES;
+                self->newPageStarted = YES;
                 [self saveLogAsync:YES];
-                if (noAckMode) {  // GNARLY TEST CODE!!!
+                if (self->noAckMode) {  // GNARLY TEST CODE!!!
                     [self.logReadoutProgress stopNotificationsAsync];
                     [self.logReadoutNotify stopNotificationsAsync];
                     [self.readoutPageComplete stopNotificationsAsync];
@@ -517,8 +517,8 @@ typedef struct __attribute__((packed)) {
             }];
         }] continueOnMetaWearWithSuccessBlock:^id _Nullable(BFTask * _Nonnull task) {
             if (self.moduleInfo.moduleRevision >= 2) {
-                rawLogEntiresToReject = [self getAllRejectEntries];
-                newPageStarted = YES;
+                self->rawLogEntiresToReject = [self getAllRejectEntries];
+                self->newPageStarted = YES;
             } else {
                 self.lastTimestamp = 0;
             }
@@ -549,14 +549,14 @@ typedef struct __attribute__((packed)) {
         [downloadHandlers removeAllObjects];
         
         dispatch_group_notify(logProcessingGroup, logProcessingQueue, ^{
-            @synchronized(handlerMutex) {
+            @synchronized(self->handlerMutex) {
                 [self saveLogAsync:NO];
                 // Now that processing is finished, if someone else is waiting for
                 // entries, kick off another download, otherwise put her to sleep.
-                if (downloadHandlers.count || progressHandlers.count) {
+                if (self->downloadHandlers.count || self->progressHandlers.count) {
                     [self rawReadOut];
                 } else {
-                    isDownloading = NO;
+                    self->isDownloading = NO;
                 }
             }
         });
@@ -662,7 +662,7 @@ typedef struct __attribute__((packed)) {
     
     // Now that it's processed, commit it to the database
     [managedObjectContext performBlock:^{
-        MBLRawLogEntry *entry = (MBLRawLogEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRawLogEntry" inManagedObjectContext:managedObjectContext];
+        MBLRawLogEntry *entry = (MBLRawLogEntry *)[NSEntityDescription insertNewObjectForEntityForName:@"MBLRawLogEntry" inManagedObjectContext:self->managedObjectContext];
         entry.timestamp = timestamp;
         entry.resetId = resetId;
         entry.triggerId = triggerId;
@@ -678,7 +678,7 @@ typedef struct __attribute__((packed)) {
         fetchRequest.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"timestamp" ascending:YES]];
         
         NSError *error;
-        NSArray *results = [managedObjectContext executeFetchRequest:fetchRequest error:&error];
+        NSArray *results = [self->managedObjectContext executeFetchRequest:fetchRequest error:&error];
         if (error) {
             MBLLog(MBLLogLevelError, @"Unable to execute fetch request.\n%@", error);
         }
@@ -691,7 +691,7 @@ typedef struct __attribute__((packed)) {
 - (void)dropEntriesSinceSave
 {
     [managedObjectContext performBlock:^{
-        [managedObjectContext rollback];
+        [self->managedObjectContext rollback];
         MBLLog(MBLLogLevelInfo, @"Rollback");
     }];
 }
@@ -702,12 +702,12 @@ typedef struct __attribute__((packed)) {
         NSFetchRequest *fetchRequest = [NSFetchRequest fetchRequestWithEntityName:@"MBLRejectEntry"];
         
         NSError *error;
-        NSArray *results = [managedObjectContext executeFetchRequest:fetchRequest error:&error];
+        NSArray *results = [self->managedObjectContext executeFetchRequest:fetchRequest error:&error];
         if (error) {
             MBLLog(MBLLogLevelError, @"Unable to execute fetch request.\n%@", error);
         } else {
             for (MBLRawLogEntry *entry in results) {
-                [managedObjectContext deleteObject:entry];
+                [self->managedObjectContext deleteObject:entry];
             }
             MBLLog(MBLLogLevelInfo, @"Delete reject entires");
         }
@@ -722,12 +722,12 @@ typedef struct __attribute__((packed)) {
         NSFetchRequest *fetchRequest = [NSFetchRequest fetchRequestWithEntityName:@"MBLRawLogEntry"];
         
         NSError *error;
-        NSArray *results = [managedObjectContext executeFetchRequest:fetchRequest error:&error];
+        NSArray *results = [self->managedObjectContext executeFetchRequest:fetchRequest error:&error];
         if (error) {
             MBLLog(MBLLogLevelError, @"Unable to execute fetch request.\n%@", error);
         } else {
             for (MBLRawLogEntry *entry in results) {
-                [managedObjectContext deleteObject:entry];
+                [self->managedObjectContext deleteObject:entry];
             }
             MBLLog(MBLLogLevelInfo, @"Delete all objects");
         }
@@ -741,7 +741,7 @@ typedef struct __attribute__((packed)) {
     [managedObjectContext performBlock:^{
         for (NSArray *array in rawEntriesToDelete) {
             for (MBLRawLogEntry *entry in array) {
-                [managedObjectContext deleteObject:entry];
+                [self->managedObjectContext deleteObject:entry];
             }
         }
     }];
@@ -754,7 +754,7 @@ typedef struct __attribute__((packed)) {
     if (async) {
         [managedObjectContext performBlock:^{
             NSError *error;
-            [managedObjectContext save:&error];
+            [self->managedObjectContext save:&error];
             if (error) {
                 MBLLog(MBLLogLevelError, @"Unable to save.\n%@", error);
             }
